@@ -276,7 +276,7 @@
       "__id__": 5
     },
     "_enabled": true,
-    "string": "<color=#f6ffc7><color=#fffc00>恭喜<color=#379aff click='nameClick'>诛神丶青梦</c>在<color=#00c317>迷心之地一层</c>击败了<color=#e60000>迷心·巫妖尊主</c> <img src='face_01' />获得了<color=#e60000>金牛道盔(1转)</c></c></c>",
+    "string": "<color=#f6ffc7><color=#fffc00>恭喜<color=#379aff click='nameClick'>诛神丶青梦</c>在<color=#00c317>XXX副本</c>击败了<color=#e60000>XXXBOSS</c> <img src='face_01' />获得了<color=#e60000>XXX头盔盔(1转)</c></c></c>",
     "maxWidth": 0,
     "fontSize": 24,
     "lineHeight": 26,
