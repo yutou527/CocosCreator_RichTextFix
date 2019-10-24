@@ -1,8 +1,8 @@
 
-
-const { ccclass, property } = cc._decorator;
+declare const utils;
 declare const require;
-const HtmlTextParser = require('./html-text-parser');
+const { ccclass, property } = cc._decorator;
+const HtmlTextParser = require('html-text-parser');
 const _htmlTextParser = new HtmlTextParser();
 interface TextData {
     text: string;
@@ -13,14 +13,15 @@ interface RichStyle {
     src?: string;
     color?: string;
     event?: { click: string };
-    underline?: boolean
+    underline?: boolean;
+    newline?: boolean;//换行
 }
 
 @ccclass
 export default class RichText extends cc.Component {
 
     @property
-    string: string = 'test';
+    string: string = '';
     @property
     maxWidth: number = 0;
     @property
@@ -46,7 +47,7 @@ export default class RichText extends cc.Component {
 
     start() {
         this.node.anchorY = 1;
-        let textData = _htmlTextParser.parse(this.string);
+        let textData = _htmlTextParser.parse(this.string) as [TextData];
         this._textData = textData;
         // cc.log(textData);
         this.sfs = {} as [{ index: string }, cc.SpriteFrame];
@@ -57,37 +58,44 @@ export default class RichText extends cc.Component {
         }
         textData.forEach(d => {
             let node = this.dealData(d);
-            this.addItem(node);
+            // this.addItem(node);
+            node.forEach(n => {
+                this.addItemWithLayout(n, d.style)
+            })
         })
         // cc.log(this)
-        this.scheduleOnce(_ => {
-            this.relayout();
-            this.resizeHeight();
-        })
-
+        // this.scheduleOnce(_ => {
+        // this.relayout();
+        this.resizeHeight();
+        // })
+        // this.node.on(cc.Node.EventType.TOUCH_END, e => {
+        //     this.debug();
+        //     cc.log(this)
+        // })
     }
 
-    dealData(data: TextData): cc.Node {
-        if (data.style.isImage) {
-            return this.makeSprite(data);
+    dealData(data: TextData): Array<cc.Node> {
+        if (data.style && data.style.isImage) {
+            return [this.makeSprite(data)];
         } else {
             return this.makeLabel(data);
         }
     }
-    makeLabel(textData: TextData): cc.Node {
+    makeLabel(textData: TextData): Array<cc.Node> {
         let label = new cc.Node().addComponent(cc.Label);
+        let style = textData.style || {};
         label.string = textData.text;
         label.fontSize = this.fontSize;
-        label.lineHeight = this.lineHeight;
+        label.lineHeight = this.fontSize + 2;
 
-        if (!textData.style.color) {
+        if (!style.color) {
             label.node.color = this.node.color;
         } else {
-            label.node.color = new cc.Color().fromHEX(textData.style.color)
+            label.node.color = new cc.Color().fromHEX(style.color)
         }
         //@ts-ignore
-        label._enableUnderline(textData.style.underline);
-        if (textData.style.event) {
+        label._enableUnderline(style.underline);
+        if (style.event) {
             //添加事件
             label.node.on(cc.Node.EventType.TOUCH_END, e => {
                 if (!this.eventComponentName) {
@@ -95,16 +103,42 @@ export default class RichText extends cc.Component {
                     return;
                 }
                 let eCmp = this.getComponent(this.eventComponentName);
-                if (eCmp && eCmp[textData.style.event.click]) {
-                    eCmp[textData.style.event.click].call(eCmp, textData.text);
+                if (eCmp && eCmp[style.event.click]) {
+                    eCmp[style.event.click].call(eCmp);
                 } else {
-                    cc.warn('cant find component ' + this.eventComponentName + ' for event ' + textData.style.event.click)
+                    cc.warn('cant find component ' + this.eventComponentName + ' for event ' + style.event.click)
                 }
             })
         }
         //计算width
-        // label.node.width = this.fontSize * textData.text.length;
-        return label.node;
+        //@ts-ignore
+        label._updateRenderData(true)
+        // return [label.node];
+        return this._splitLabel(label.node, textData);
+    }
+    _splitLabel(node: cc.Node, data: TextData): Array<cc.Node> {
+        let labels: Array<cc.Node> = [];
+        if (this.maxWidth > 0) {
+            let overWidth = (this._nowX + node.width) - this.maxWidth;
+            if (overWidth > 0) {
+                let _strLength = data.text.length;
+                let _overStrs = Math.ceil(_strLength * (overWidth / this.maxWidth));
+                let str = data.text.slice(0, _strLength - _overStrs);
+                let nextStr = data.text.slice(_strLength - _overStrs, data.text.length);
+                labels.push(...this.makeLabel({
+                    text: str,
+                    style: data.style
+                }))
+                labels.push(...this.makeLabel({
+                    text: nextStr,
+                    style: data.style
+                }))
+            } else {
+                labels.push(node)
+            }
+        }
+
+        return labels;
     }
     makeSprite(textData: TextData): cc.Node {
         let sprite = new cc.Node().addComponent(cc.Sprite);
@@ -117,9 +151,29 @@ export default class RichText extends cc.Component {
         sprite.trim = false;
         return sprite.node;
     }
+    addItemWithLayout(node: cc.Node, style: RichStyle) {
+        let pos = this._getLastPos();
+        if (this.maxWidth > 0 && this._nowX + node.width > this.maxWidth || (style && style.newline)) {
+            this._nextLine();
+        }
+
+        pos.x = this._nowX + node.width / 2;
+        pos.y = -this._nowLine * this.lineHeight + this.lineHeight / 2;
+        this._nowX += node.width;
+
+
+
+        node.position = pos;
+        this.node.addChild(node);
+    }
+
     addItem(node: cc.Node) {
         node.opacity = 0;
         this.node.addChild(node);
+    }
+    _nextLine() {
+        this._nowX = 0;
+        this._nowLine += 1;
     }
 
     //重新排版
@@ -139,15 +193,7 @@ export default class RichText extends cc.Component {
                     this._nowX = 0;
                     this._mutilLineFix += this._heightFix;
                     this._heightFix = 0
-                    // if (this._textData[i].style.isImage) {
-                    //     this._nowLine += 1;
-                    //     //图片 直接换
-                    //     x = 0;
-                    //     y = this._nowLine * this.lineHeight;
-                    // } else { 
-                    //     //分割label
 
-                    // }
                 } else {
 
                 }
@@ -156,10 +202,11 @@ export default class RichText extends cc.Component {
                 y = this._nowLine * this.lineHeight;
                 this._nowX += c.width;
 
-                if (this._nowLine == 1) {
+                if (this._nowLine == 1) { //根据第一行决定width
                     this.node.width += c.width;
                 }
-                if (this._textData[i].style.isImage) {
+                let style = this._textData[i].style || {};
+                if (style.isImage) {
                     if (c.height > this.lineHeight) {
                         let fix = c.height - this.lineHeight;
                         if (fix > this._heightFix)
@@ -171,7 +218,8 @@ export default class RichText extends cc.Component {
                 this._nowX += c.width;
                 this.node.width += c.width;
                 //fix height
-                if (this._textData[i].style.isImage) {
+                let style = this._textData[i].style || {};
+                if (style.isImage) {
                     if (c.height > this.lineHeight) {
                         let fix = c.height - this.lineHeight;
                         if (fix > this._heightFix)
@@ -182,13 +230,41 @@ export default class RichText extends cc.Component {
 
 
             c.x = x;
-            c.y = -y;
+            c.y = - y + this.lineHeight / 2;
             c.opacity = 255;
         })
     }
     resizeHeight() {
-        this.node.height = this._nowLine * this.lineHeight + (this._mutilLineFix || this._heightFix);
+        this.node.height = this._nowLine * this.lineHeight //+ (this._mutilLineFix || this._heightFix);
     }
+    _getLastPos(): cc.Vec2 {
+        let pos = new cc.Vec2();
+        let lastNode = this.node.children[this.node.children.length - 1]
+        if (lastNode)
+            pos = lastNode.position;
+        return pos;
+    }
+    debug() {
+        let graphic = this.node.addComponent(cc.Graphics);
+        graphic.strokeColor = utils.getUIColor('green');
+        graphic.lineWidth = 2;
+        graphic.moveTo(0, 0);
+        graphic.circle(0, 0, 3);
+        graphic.lineTo(this.node.width, 0)
+        graphic.circle(this.node.width, 0, 3)
+
+        graphic.lineTo(this.node.width, -this.node.height);
+        graphic.circle(this.node.width, -this.node.height, 3);
+
+
+        graphic.lineTo(0, -this.node.height);
+        graphic.circle(0, -this.node.height, 3);
+
+        graphic.lineTo(0, 0);
+
+        graphic.stroke();
+    }
+
     //换行情况需要打断label
 
     // update (dt) {}
