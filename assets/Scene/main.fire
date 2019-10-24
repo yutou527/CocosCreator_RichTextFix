@@ -277,7 +277,7 @@
     },
     "_enabled": true,
     "string": "<color=#f6ffc7><color=#fffc00>恭喜<color=#379aff click='nameClick'>诛神丶青梦</c>在<color=#00c317>XXX副本</c>击败了<color=#e60000>XXXBOSS</c> <img src='face_01' />获得了<color=#e60000>XXX头盔盔(1转)</c></c></c>",
-    "maxWidth": 0,
+    "maxWidth": 450,
     "fontSize": 24,
     "lineHeight": 26,
     "eventComponentName": "LabelEvent",
